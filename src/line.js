@@ -121,7 +121,7 @@ async function handleWebhook(req) {
     const groupId = source.groupId || userId;
     const isGroup = source.type === 'group' || source.type === 'room';
 
-    // グループの場合、メンションがなければ無視（画像・ファイルは除く）
+    // グループの場合、テキストメッセージはメンション必須
     if (isGroup && event.message.type === 'text') {
       const mention = event.message.mention;
       const hasBotMention = mention?.mentionees?.some(m => m.type === 'user');
@@ -133,6 +133,11 @@ async function handleWebhook(req) {
 
       // メンション部分を除去してテキストを取得
       event.message.text = event.message.text.replace(/@\S+/g, '').trim();
+    }
+
+    // グループの場合、画像・ファイルも無視（1対1のみ処理）
+    if (isGroup && (event.message.type === 'image' || event.message.type === 'file')) {
+      continue;
     }
 
     try {
