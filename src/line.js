@@ -6,8 +6,8 @@ const { handleFileMessage, handleFileSaveIntent } = require('./drive');
 const { setReminder } = require('./reminder');
 
 const LINE_API_URL = 'https://api.line.me/v2/bot/message';
-const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET;
+const CHANNEL_ACCESS_TOKEN = (process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
+const CHANNEL_SECRET = (process.env.LINE_CHANNEL_SECRET || '').trim();
 
 // 署名検証
 function validateSignature(body, signature) {
