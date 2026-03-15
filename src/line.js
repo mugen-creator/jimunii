@@ -119,6 +119,21 @@ async function handleWebhook(req) {
     const source = event.source;
     const userId = source.userId;
     const groupId = source.groupId || userId;
+    const isGroup = source.type === 'group' || source.type === 'room';
+
+    // グループの場合、メンションがなければ無視（画像・ファイルは除く）
+    if (isGroup && event.message.type === 'text') {
+      const mention = event.message.mention;
+      const hasBotMention = mention?.mentionees?.some(m => m.type === 'user');
+
+      // メンションがない場合はスキップ
+      if (!hasBotMention) {
+        continue;
+      }
+
+      // メンション部分を除去してテキストを取得
+      event.message.text = event.message.text.replace(/@\S+/g, '').trim();
+    }
 
     try {
       // ファイルメッセージの処理
