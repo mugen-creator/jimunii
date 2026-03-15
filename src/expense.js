@@ -1,9 +1,11 @@
-// 経費管理（メモリ内保存 - 後でスプレッドシート連携予定）
+// 経費管理（メモリ + スプレッドシート保存）
+
+const { saveExpenseToSheet, getMonthlyExpenseSummary } = require('./sheets');
 
 const expenses = [];
 
 // 経費を登録
-function registerExpense(data) {
+async function registerExpense(data) {
   const expense = {
     id: Date.now(),
     date: data.date || new Date().toISOString().split('T')[0],
@@ -15,6 +17,10 @@ function registerExpense(data) {
   };
 
   expenses.push(expense);
+
+  // スプレッドシートにも保存
+  await saveExpenseToSheet(expense);
+
   return expense;
 }
 

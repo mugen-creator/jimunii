@@ -370,7 +370,7 @@ async function handleWebhook(req) {
             if (!lastReceipt || Date.now() - lastReceipt.timestamp > 10 * 60 * 1000) {
               responseMsg = '❌ レシート情報が見つかりません。\n先にレシートの画像を送ってください。';
             } else {
-              const expense = registerExpense({
+              const expense = await registerExpense({
                 date: lastReceipt.date,
                 store: lastReceipt.store,
                 amount: lastReceipt.total,
@@ -388,7 +388,7 @@ async function handleWebhook(req) {
           }
 
           case 'task_add': {
-            const task = addTask(
+            const task = await addTask(
               groupId,
               params.taskTitle || params.title,
               params.taskDueDate || params.date,
@@ -403,7 +403,7 @@ async function handleWebhook(req) {
           }
 
           case 'task_complete': {
-            const completed = completeTask(groupId, params.taskTitle || params.title);
+            const completed = await completeTask(groupId, params.taskTitle || params.title);
             if (completed) {
               responseMsg = `✅ タスク「${completed.title}」を完了しました！`;
             } else {

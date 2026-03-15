@@ -1,9 +1,11 @@
 // タスク管理（ToDoリスト）
 
+const { saveTaskToSheet, updateTaskInSheet } = require('./sheets');
+
 const tasks = new Map(); // groupId -> tasks[]
 
 // タスクを追加
-function addTask(groupId, title, dueDate = null, priority = 'normal') {
+async function addTask(groupId, title, dueDate = null, priority = 'normal') {
   if (!tasks.has(groupId)) {
     tasks.set(groupId, []);
   }
@@ -18,11 +20,15 @@ function addTask(groupId, title, dueDate = null, priority = 'normal') {
   };
 
   tasks.get(groupId).push(task);
+
+  // スプレッドシートにも保存
+  await saveTaskToSheet(task, groupId);
+
   return task;
 }
 
 // タスクを完了
-function completeTask(groupId, taskIdOrTitle) {
+async function completeTask(groupId, taskIdOrTitle) {
   const groupTasks = tasks.get(groupId);
   if (!groupTasks) return null;
 
@@ -35,6 +41,10 @@ function completeTask(groupId, taskIdOrTitle) {
   if (task) {
     task.completed = true;
     task.completedAt = new Date().toISOString();
+
+    // スプレッドシートも更新
+    await updateTaskInSheet(task.id, '完了');
+
     return task;
   }
   return null;
