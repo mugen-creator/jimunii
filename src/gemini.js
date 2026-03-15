@@ -1,6 +1,8 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const axios = require('axios');
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim();
+const MODEL = 'llama-3.3-70b-versatile';
 
 // 今日の日付を取得
 function getToday() {
@@ -51,22 +53,32 @@ JSON形式:
 今日の日付: ${getToday()}`;
 }
 
+// Groq APIを呼び出す
+async function callGroq(systemPrompt, userMessage) {
+  const response = await axios.post(
+    GROQ_API_URL,
+    {
+      model: MODEL,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+      temperature: 0.3,
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+    }
+  );
+  return response.data.choices[0].message.content;
+}
+
 // メッセージから意図を解析
 async function parseIntent(message) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: message }],
-        },
-      ],
-      systemInstruction: getIntentSystemPrompt(),
-    });
-
-    const response = result.response.text();
+    const response = await callGroq(getIntentSystemPrompt(), message);
 
     // JSONを抽出（マークダウンのコードブロックが含まれる場合に対応）
     let jsonStr = response;
@@ -80,7 +92,7 @@ async function parseIntent(message) {
 
     return JSON.parse(jsonStr);
   } catch (err) {
-    console.error('Gemini解析エラー:', err);
+    console.error('Groq解析エラー:', err.response?.data || err.message);
     return null;
   }
 }
@@ -88,21 +100,10 @@ async function parseIntent(message) {
 // 雑談用の応答生成
 async function generateChatResponse(message) {
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: message }],
-        },
-      ],
-      systemInstruction: '合同会社無限の事務アシスタントとして、簡潔に日本語で答えてください。',
-    });
-
-    return result.response.text();
+    const systemPrompt = '合同会社無限の事務アシスタントとして、簡潔に日本語で答えてください。';
+    return await callGroq(systemPrompt, message);
   } catch (err) {
-    console.error('Gemini応答エラー:', err);
+    console.error('Groq応答エラー:', err.response?.data || err.message);
     return 'すみません、応答を生成できませんでした。';
   }
 }
