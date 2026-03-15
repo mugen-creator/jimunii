@@ -1,9 +1,10 @@
 const crypto = require('crypto');
 const axios = require('axios');
 const { parseIntent } = require('./gemini');
-const { addEvent, deleteEvent, getEvents } = require('./calendar');
+const { addEvent, updateEvent, deleteEvent, getEvents } = require('./calendar');
 const { handleFileMessage, handleFileSaveIntent } = require('./drive');
 const { setReminder } = require('./reminder');
+const { getHistory, addMessage, setLastAction, getLastAction } = require('./conversation');
 
 const LINE_API_URL = 'https://api.line.me/v2/bot/message';
 const CHANNEL_ACCESS_TOKEN = (process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
@@ -124,15 +125,33 @@ async function handleWebhook(req) {
       if (event.message.type === 'text') {
         const text = event.message.text;
 
-        // 意図解析
-        const result = await parseIntent(text);
+        // 会話履歴と前回の操作を取得
+        const history = getHistory(groupId);
+        const lastAction = getLastAction(groupId);
+
+        // 意図解析（会話履歴付き）
+        const result = await parseIntent(text, history, lastAction);
+
+        // ユーザーメッセージを履歴に追加
+        addMessage(groupId, 'user', text);
 
         if (!result || !result.intent) {
-          await replyMessage(replyToken, '❌ メッセージを理解できませんでした。もう一度お試しください。');
+          const errorMsg = '❌ メッセージを理解できませんでした。もう一度お試しください。';
+          addMessage(groupId, 'assistant', errorMsg);
+          await replyMessage(replyToken, errorMsg);
           continue;
         }
 
-        const { intent, params } = result;
+        let { intent, params } = result;
+
+        // 直前の操作を参照している場合、パラメータを補完
+        if (result.refersPrevious && lastAction) {
+          if (!params.date && lastAction.date) params.date = lastAction.date;
+          if (!params.title && lastAction.title) params.title = lastAction.title;
+          if (!params.time && lastAction.time) params.time = lastAction.time;
+        }
+
+        let responseMsg = '';
 
         switch (intent) {
           case 'calendar_add': {
@@ -140,23 +159,59 @@ async function handleWebhook(req) {
               params.date,
               params.time,
               params.title,
-              params.duration || 60
+              params.duration || 60,
+              params.location,
+              params.memo
             );
             const dateFormatted = formatDate(params.date);
             const timeStr = params.time || '終日';
-            await replyMessage(
-              replyToken,
-              `✅ 予定を登録しました！\n\n📅 ${dateFormatted} ${timeStr} ${params.title}`
+            let msg = `✅ 予定を登録しました！\n\n📅 ${dateFormatted} ${timeStr}\n📝 ${params.title}`;
+            if (params.location) msg += `\n📍 ${params.location}`;
+            if (params.memo) msg += `\n💬 ${params.memo}`;
+            responseMsg = msg;
+
+            // 最後の操作を保存
+            setLastAction(groupId, {
+              intent: 'calendar_add',
+              date: params.date,
+              time: params.time,
+              title: params.title,
+            });
+            break;
+          }
+
+          case 'calendar_update': {
+            const updateResult = await updateEvent(
+              params.date,
+              params.title,
+              params.newDate,
+              params.newTime,
+              params.newTitle
             );
+            if (updateResult.success) {
+              const newDateStr = params.newDate || params.date;
+              const newTimeStr = params.newTime || params.time || '終日';
+              const newTitleStr = params.newTitle || params.title;
+              responseMsg = `✅ 予定を変更しました！\n\n📅 ${formatDate(newDateStr)} ${newTimeStr}\n📝 ${newTitleStr}`;
+
+              setLastAction(groupId, {
+                intent: 'calendar_update',
+                date: newDateStr,
+                time: params.newTime || params.time,
+                title: newTitleStr,
+              });
+            } else {
+              responseMsg = `❌ ${updateResult.error}`;
+            }
             break;
           }
 
           case 'calendar_delete': {
             const deleted = await deleteEvent(params.date, params.title);
             if (deleted) {
-              await replyMessage(replyToken, `✅ 予定「${params.title}」を削除しました。`);
+              responseMsg = `✅ 予定「${params.title}」を削除しました。`;
             } else {
-              await replyMessage(replyToken, `❌ 予定「${params.title}」が見つかりませんでした。`);
+              responseMsg = `❌ 予定「${params.title}」が見つかりませんでした。`;
             }
             break;
           }
@@ -164,14 +219,14 @@ async function handleWebhook(req) {
           case 'calendar_get': {
             const startDate = params.startDate || params.date;
             const endDate = params.endDate || params.date;
-            const events = await getEvents(startDate, endDate);
+            const calEvents = await getEvents(startDate, endDate);
 
-            if (events.length === 0) {
-              await replyMessage(replyToken, '📅 該当する予定はありません。');
+            if (calEvents.length === 0) {
+              responseMsg = '📅 該当する予定はありません。';
             } else {
               // 日付ごとにグループ化
               const grouped = {};
-              for (const ev of events) {
+              for (const ev of calEvents) {
                 const dateKey = ev.start.dateTime
                   ? ev.start.dateTime.split('T')[0]
                   : ev.start.date;
@@ -186,7 +241,7 @@ async function handleWebhook(req) {
               for (const [date, items] of Object.entries(grouped)) {
                 msg += `\n${formatDate(date)}\n${items.join('\n')}`;
               }
-              await replyMessage(replyToken, msg);
+              responseMsg = msg;
             }
             break;
           }
@@ -194,12 +249,9 @@ async function handleWebhook(req) {
           case 'drive_save': {
             const saveResult = await handleFileSaveIntent(groupId, params.fileName, params.folderPath);
             if (saveResult.success) {
-              await replyMessage(
-                replyToken,
-                `✅ 保存しました！\n\n📁 フォルダ：${saveResult.folderName}\n🔗 ${saveResult.fileUrl}`
-              );
+              responseMsg = `✅ 保存しました！\n\n📁 フォルダ：${saveResult.folderName}\n🔗 ${saveResult.fileUrl}`;
             } else {
-              await replyMessage(replyToken, `❌ ${saveResult.error}`);
+              responseMsg = `❌ ${saveResult.error}`;
             }
             break;
           }
@@ -213,24 +265,32 @@ async function handleWebhook(req) {
             );
             if (reminderResult.success) {
               const dateFormatted = formatDate(params.date);
-              await replyMessage(
-                replyToken,
-                `⏰ リマインダーをセットしました！\n\n📅 ${dateFormatted} ${params.time}\n「${params.title || params.message}」をお知らせします`
-              );
+              responseMsg = `⏰ リマインダーをセットしました！\n\n📅 ${dateFormatted} ${params.time}\n「${params.title || params.message}」をお知らせします`;
+
+              setLastAction(groupId, {
+                intent: 'reminder_set',
+                date: params.date,
+                time: params.time,
+                title: params.title || params.message,
+              });
             } else {
-              await replyMessage(replyToken, `❌ リマインダーの設定に失敗しました。`);
+              responseMsg = `❌ リマインダーの設定に失敗しました。`;
             }
             break;
           }
 
           case 'chat': {
-            await replyMessage(replyToken, params.message || result.response || 'お手伝いできることはありますか？');
+            responseMsg = params.message || result.response || 'お手伝いできることはありますか？';
             break;
           }
 
           default:
-            await replyMessage(replyToken, '❌ 対応していない操作です。');
+            responseMsg = '❌ 対応していない操作です。';
         }
+
+        // アシスタントの返答を履歴に追加
+        addMessage(groupId, 'assistant', responseMsg);
+        await replyMessage(replyToken, responseMsg);
       }
     } catch (err) {
       console.error('メッセージ処理エラー:', err);
