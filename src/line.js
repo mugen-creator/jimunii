@@ -727,6 +727,16 @@ async function handleWebhook(req) {
             responseMsg = '❌ 対応していない操作です。';
         }
 
+        // 修正があれば表示
+        if (result.corrected) {
+          responseMsg = `💡 ${result.corrected}\n\n${responseMsg}`;
+        }
+
+        // 提案があれば追加
+        if (result.suggestion) {
+          responseMsg += `\n\n💡 ${result.suggestion}`;
+        }
+
         // アシスタントの返答を履歴に追加
         addMessage(groupId, 'assistant', responseMsg);
         await replyMessage(replyToken, responseMsg);
