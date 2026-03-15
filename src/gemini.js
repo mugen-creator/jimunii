@@ -43,11 +43,15 @@ intent一覧:
 - drive_save: ファイルを保存する
 - reminder_set: リマインダーをセットする
 - expense_register: 経費を登録する（レシート読み取り後）
+- task_add: タスクを追加する
+- task_complete: タスクを完了にする
+- task_delete: タスクを削除する
+- task_list: タスク一覧を表示する
 - chat: 上記以外の雑談・質問
 
 JSON形式:
 {
-  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "chat",
+  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "chat",
   "params": {
     "date": "YYYY-MM-DD形式（繰り返し予定の開始日）",
     "startDate": "期間の開始日（calendar_get用）",
@@ -70,6 +74,9 @@ JSON形式:
     "folderPath": "保存先フォルダ（例: 請求書、経費/3月）",
     "expenseCategory": "経費カテゴリ（交通費、消耗品、飲食費、通信費、その他）",
     "expenseMemo": "経費のメモ",
+    "taskTitle": "タスクのタイトル",
+    "taskPriority": "high" | "normal" | "low",
+    "taskDueDate": "タスクの期限（YYYY-MM-DD）",
     "message": "雑談の応答テキスト"
   },
   "refersPrevious": true/false（直前の操作を参照しているかどうか）
@@ -90,6 +97,10 @@ JSON形式:
   - 「隔週」→ frequency: "weekly", interval: 2
 - 繰り返し予定のdateは次の該当日（来週月曜なら来週月曜の日付）
 - 「経費に登録」「経費登録」「記録して」などはexpense_registerを使用
+- 「やること」「TODO」「タスク追加」などはtask_add
+- 「完了」「終わった」「できた」などはtask_complete
+- 「タスク一覧」「やることリスト」などはtask_list
+- 「重要」「急ぎ」「優先」はtaskPriority: "high"
 - JSONのみを返し、説明文は一切付けない
 
 今日の日付: ${getToday()}`;

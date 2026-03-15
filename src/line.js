@@ -7,6 +7,7 @@ const { setReminder } = require('./reminder');
 const { getHistory, addMessage, setLastAction, getLastAction } = require('./conversation');
 const { extractText, parseReceipt, formatReceiptResult } = require('./ocr');
 const { registerExpense, formatExpenseList, getMonthlyTotal } = require('./expense');
+const { addTask, completeTask, deleteTask, getAllTasks, formatTaskList } = require('./task');
 
 // 最後に読み取ったレシート情報を保存
 const lastReceipts = new Map();
@@ -383,6 +384,47 @@ async function handleWebhook(req) {
               // 使用済みのレシート情報を削除
               lastReceipts.delete(groupId);
             }
+            break;
+          }
+
+          case 'task_add': {
+            const task = addTask(
+              groupId,
+              params.taskTitle || params.title,
+              params.taskDueDate || params.date,
+              params.taskPriority || 'normal'
+            );
+            const priorityLabel = { high: '🔴 高', normal: '⚪ 中', low: '🔵 低' };
+            let msg = `✅ タスクを追加しました！\n\n📝 ${task.title}`;
+            if (task.dueDate) msg += `\n📅 期限：${task.dueDate}`;
+            msg += `\n⚡ 優先度：${priorityLabel[task.priority]}`;
+            responseMsg = msg;
+            break;
+          }
+
+          case 'task_complete': {
+            const completed = completeTask(groupId, params.taskTitle || params.title);
+            if (completed) {
+              responseMsg = `✅ タスク「${completed.title}」を完了しました！`;
+            } else {
+              responseMsg = '❌ タスクが見つかりませんでした。';
+            }
+            break;
+          }
+
+          case 'task_delete': {
+            const deleted = deleteTask(groupId, params.taskTitle || params.title);
+            if (deleted) {
+              responseMsg = `✅ タスクを削除しました。`;
+            } else {
+              responseMsg = '❌ タスクが見つかりませんでした。';
+            }
+            break;
+          }
+
+          case 'task_list': {
+            const allTasks = getAllTasks(groupId);
+            responseMsg = formatTaskList(allTasks, true);
             break;
           }
 
