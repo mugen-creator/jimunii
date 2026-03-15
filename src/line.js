@@ -477,6 +477,40 @@ async function handleWebhook(req) {
             break;
           }
 
+          case 'expense_bulk': {
+            const items = params.expenseItems || [];
+            if (items.length === 0) {
+              responseMsg = '❌ 経費項目が見つかりません。';
+            } else {
+              const today = new Date().toISOString().split('T')[0];
+              let total = 0;
+              let registered = 0;
+
+              for (const item of items) {
+                try {
+                  await registerExpense({
+                    date: today,
+                    store: item.name || '不明',
+                    amount: item.amount || 0,
+                    category: item.category || 'その他',
+                    memo: '',
+                  });
+                  total += item.amount || 0;
+                  registered++;
+                } catch (err) {
+                  console.error('一括経費登録エラー:', err);
+                }
+              }
+
+              responseMsg = `✅ 経費を一括登録しました！\n\n📝 ${registered}件\n💰 合計 ¥${total.toLocaleString()}`;
+
+              for (const item of items) {
+                responseMsg += `\n・${item.name}：¥${(item.amount || 0).toLocaleString()}`;
+              }
+            }
+            break;
+          }
+
           case 'task_add': {
             const task = await addTask(
               groupId,
@@ -489,6 +523,38 @@ async function handleWebhook(req) {
             if (task.dueDate) msg += `\n📅 期限：${task.dueDate}`;
             msg += `\n⚡ 優先度：${priorityLabel[task.priority]}`;
             responseMsg = msg;
+            break;
+          }
+
+          case 'task_bulk': {
+            const items = params.taskItems || [];
+            if (items.length === 0) {
+              responseMsg = '❌ タスクが見つかりません。';
+            } else {
+              let registered = 0;
+              const addedTasks = [];
+
+              for (const item of items) {
+                try {
+                  const task = await addTask(
+                    groupId,
+                    item.title,
+                    item.dueDate || null,
+                    item.priority || 'normal'
+                  );
+                  addedTasks.push(task);
+                  registered++;
+                } catch (err) {
+                  console.error('一括タスク登録エラー:', err);
+                }
+              }
+
+              responseMsg = `✅ タスクを一括登録しました！\n\n📝 ${registered}件`;
+
+              for (const task of addedTasks) {
+                responseMsg += `\n・${task.title}`;
+              }
+            }
             break;
           }
 

@@ -43,6 +43,8 @@ intent一覧:
 - drive_save: ファイルを保存する
 - reminder_set: リマインダーをセットする
 - expense_register: 経費を登録する（レシート読み取り後）
+- expense_bulk: 複数の経費をまとめて登録する
+- task_bulk: 複数のタスクをまとめて登録する
 - task_add: タスクを追加する
 - task_complete: タスクを完了にする
 - task_delete: タスクを削除する
@@ -64,7 +66,7 @@ intent一覧:
 
 JSON形式:
 {
-  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "attendance_in" | "attendance_out" | "attendance_status" | "weather" | "translate" | "email_draft" | "daily_report" | "template_get" | "template_add" | "template_list" | "help" | "calculate" | "convert_unit" | "chat",
+  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "expense_bulk" | "task_add" | "task_bulk" | "task_complete" | "task_delete" | "task_list" | "attendance_in" | "attendance_out" | "attendance_status" | "weather" | "translate" | "email_draft" | "daily_report" | "template_get" | "template_add" | "template_list" | "help" | "calculate" | "convert_unit" | "chat",
   "params": {
     "date": "YYYY-MM-DD形式（繰り返し予定の開始日）",
     "startDate": "期間の開始日（calendar_get用）",
@@ -87,6 +89,8 @@ JSON形式:
     "folderPath": "保存先フォルダ（例: 請求書、経費/3月）",
     "expenseCategory": "経費カテゴリ（交通費、消耗品、飲食費、通信費、その他）",
     "expenseMemo": "経費のメモ",
+    "expenseItems": [{"name": "項目名", "amount": 金額, "category": "カテゴリ"}],
+    "taskItems": [{"title": "タスク名", "dueDate": "期限", "priority": "優先度"}],
     "taskTitle": "タスクのタイトル",
     "taskPriority": "high" | "normal" | "low",
     "taskDueDate": "タスクの期限（YYYY-MM-DD）",
@@ -125,6 +129,9 @@ JSON形式:
   - 「隔週」→ frequency: "weekly", interval: 2
 - 繰り返し予定のdateは次の該当日（来週月曜なら来週月曜の日付）
 - 「経費に登録」「経費登録」「記録して」などはexpense_registerを使用
+- 複数行の経費やタスクはexpense_bulk/task_bulkを使用
+- 「経費まとめて」「タスクまとめて」「一括登録」などは一括処理
+- 各項目を配列で返す（金額は数値、カテゴリは推測）
 - 「やること」「TODO」「タスク追加」などはtask_add
 - 「完了」「終わった」「できた」などはtask_complete
 - 「タスク一覧」「やることリスト」などはtask_list
