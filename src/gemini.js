@@ -35,7 +35,8 @@ function getIntentSystemPrompt(lastAction) {
 ${contextInfo}
 
 intent一覧:
-- calendar_add: 予定を登録する
+- calendar_add: 予定を登録する（単発）
+- calendar_add_recurring: 繰り返し予定を登録する（毎日、毎週、毎月など）
 - calendar_delete: 予定を削除する
 - calendar_get: 予定を確認する
 - calendar_update: 予定を変更する（時間や日付の変更）
@@ -45,9 +46,9 @@ intent一覧:
 
 JSON形式:
 {
-  "intent": "calendar_add" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "chat",
+  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "chat",
   "params": {
-    "date": "YYYY-MM-DD形式",
+    "date": "YYYY-MM-DD形式（繰り返し予定の開始日）",
     "startDate": "期間の開始日（calendar_get用）",
     "endDate": "期間の終了日（calendar_get用）",
     "time": "HH:MM形式",
@@ -58,6 +59,12 @@ JSON形式:
     "duration": 分数（数値）,
     "location": "場所（オプション）",
     "memo": "メモ（オプション）",
+    "recurrence": {
+      "frequency": "daily" | "weekly" | "monthly" | "yearly",
+      "days": ["月", "火", ...] （毎週の場合、曜日の配列）,
+      "interval": 数値（2週間ごとなら2）,
+      "dayOfMonth": 数値（毎月の場合、日付）
+    },
     "fileName": "ファイル名",
     "folderPath": "保存先フォルダ（例: 請求書、経費/3月）",
     "message": "雑談の応答テキスト"
@@ -72,6 +79,13 @@ JSON形式:
 - 「それ」「その予定」「やっぱり」「キャンセル」など曖昧な表現は直前の操作を参照
 - chatの場合はparamsにmessageを含め、会話の流れを考慮した返答を入れる
 - 場所が「@」や「で」の後に続く場合はlocationに抽出
+- 「毎週」「毎日」「毎月」などはcalendar_add_recurringを使用
+  - 「毎週月曜」→ frequency: "weekly", days: ["月"]
+  - 「毎週火曜と金曜」→ frequency: "weekly", days: ["火", "金"]
+  - 「毎日」→ frequency: "daily"
+  - 「毎月1日」→ frequency: "monthly", dayOfMonth: 1
+  - 「隔週」→ frequency: "weekly", interval: 2
+- 繰り返し予定のdateは次の該当日（来週月曜なら来週月曜の日付）
 - JSONのみを返し、説明文は一切付けない
 
 今日の日付: ${getToday()}`;

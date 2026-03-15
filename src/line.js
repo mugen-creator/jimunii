@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const axios = require('axios');
 const { parseIntent } = require('./gemini');
-const { addEvent, updateEvent, deleteEvent, getEvents } = require('./calendar');
+const { addEvent, addRecurringEvent, updateEvent, deleteEvent, getEvents } = require('./calendar');
 const { handleFileMessage, handleFileSaveIntent } = require('./drive');
 const { setReminder } = require('./reminder');
 const { getHistory, addMessage, setLastAction, getLastAction } = require('./conversation');
@@ -173,6 +173,57 @@ async function handleWebhook(req) {
             // 最後の操作を保存
             setLastAction(groupId, {
               intent: 'calendar_add',
+              date: params.date,
+              time: params.time,
+              title: params.title,
+            });
+            break;
+          }
+
+          case 'calendar_add_recurring': {
+            const recurrence = params.recurrence || { frequency: 'weekly' };
+            await addRecurringEvent(
+              params.date,
+              params.time,
+              params.title,
+              recurrence,
+              params.duration || 60,
+              params.location
+            );
+
+            // 繰り返しパターンの説明を生成
+            let patternStr = '';
+            switch (recurrence.frequency) {
+              case 'daily':
+                patternStr = recurrence.interval > 1 ? `${recurrence.interval}日ごと` : '毎日';
+                break;
+              case 'weekly':
+                if (recurrence.days && recurrence.days.length > 0) {
+                  patternStr = `毎週${recurrence.days.join('・')}曜`;
+                } else {
+                  patternStr = recurrence.interval > 1 ? `${recurrence.interval}週間ごと` : '毎週';
+                }
+                break;
+              case 'monthly':
+                if (recurrence.dayOfMonth) {
+                  patternStr = `毎月${recurrence.dayOfMonth}日`;
+                } else {
+                  patternStr = '毎月';
+                }
+                break;
+              case 'yearly':
+                patternStr = '毎年';
+                break;
+            }
+
+            const dateFormatted = formatDate(params.date);
+            const timeStr = params.time || '終日';
+            let msg = `✅ 繰り返し予定を登録しました！\n\n🔄 ${patternStr}\n📅 開始：${dateFormatted} ${timeStr}\n📝 ${params.title}`;
+            if (params.location) msg += `\n📍 ${params.location}`;
+            responseMsg = msg;
+
+            setLastAction(groupId, {
+              intent: 'calendar_add_recurring',
               date: params.date,
               time: params.time,
               title: params.title,
