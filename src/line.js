@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const { parseIntent, translate } = require('./gemini');
+const { parseIntent, translate, generateEmailDraft, generateDailyReport } = require('./gemini');
 const { addEvent, addRecurringEvent, updateEvent, deleteEvent, getEvents } = require('./calendar');
 const { handleFileMessage, handleFileSaveIntent } = require('./drive');
 const { setReminder } = require('./reminder');
@@ -10,6 +10,7 @@ const { registerExpense, formatExpenseList, getMonthlyTotal } = require('./expen
 const { addTask, completeTask, deleteTask, getAllTasks, formatTaskList } = require('./task');
 const { recordAttendance, getTodayAttendance, formatAttendanceStatus } = require('./attendance');
 const { getWeather, formatWeather } = require('./weather');
+const { getTemplate, addTemplate, listTemplates, formatTemplateList } = require('./template');
 
 // 最後に読み取ったレシート情報を保存
 const lastReceipts = new Map();
@@ -482,6 +483,60 @@ async function handleWebhook(req) {
                 responseMsg = '❌ 翻訳に失敗しました。';
               }
             }
+            break;
+          }
+
+          case 'email_draft': {
+            const email = await generateEmailDraft(
+              params.emailTo,
+              params.emailType,
+              params.emailSubject
+            );
+            if (email) {
+              responseMsg = `📧 メール下書き\n\n${email}`;
+            } else {
+              responseMsg = '❌ メール作成に失敗しました。';
+            }
+            break;
+          }
+
+          case 'daily_report': {
+            const report = await generateDailyReport(
+              params.dailyReportTasks,
+              params.dailyReportTomorrow,
+              params.dailyReportNotes
+            );
+            if (report) {
+              responseMsg = `📝 ${report}`;
+            } else {
+              responseMsg = '❌ 日報作成に失敗しました。';
+            }
+            break;
+          }
+
+          case 'template_get': {
+            const template = getTemplate(groupId, params.templateName);
+            if (template) {
+              responseMsg = `📋 ${params.templateName}\n\n${template}`;
+            } else {
+              responseMsg = `❌ 「${params.templateName}」という定型文は見つかりません。\n「定型文一覧」で確認できます。`;
+            }
+            break;
+          }
+
+          case 'template_add': {
+            if (!params.templateName || !params.templateContent) {
+              responseMsg = '❌ 定型文の名前と内容を指定してください。\n例：「挨拶2＝お世話になります」';
+            } else {
+              addTemplate(groupId, params.templateName, params.templateContent);
+              responseMsg = `✅ 定型文「${params.templateName}」を登録しました！`;
+            }
+            break;
+          }
+
+          case 'template_list': {
+            const templates = listTemplates(groupId);
+            responseMsg = formatTemplateList(templates);
             break;
           }
 

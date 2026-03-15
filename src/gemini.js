@@ -52,11 +52,16 @@ intent一覧:
 - attendance_status: 勤怠状況を確認する
 - weather: 天気予報を取得する
 - translate: テキストを翻訳する
+- email_draft: メールの下書きを作成する
+- daily_report: 日報を作成する
+- template_get: 定型文を呼び出す
+- template_add: 定型文を登録する
+- template_list: 定型文一覧を表示する
 - chat: 上記以外の雑談・質問
 
 JSON形式:
 {
-  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "attendance_in" | "attendance_out" | "attendance_status" | "weather" | "translate" | "chat",
+  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "attendance_in" | "attendance_out" | "attendance_status" | "weather" | "translate" | "email_draft" | "daily_report" | "template_get" | "template_add" | "template_list" | "chat",
   "params": {
     "date": "YYYY-MM-DD形式（繰り返し予定の開始日）",
     "startDate": "期間の開始日（calendar_get用）",
@@ -86,6 +91,14 @@ JSON形式:
     "weatherDays": 天気予報の日数（1〜7）,
     "translateText": "翻訳するテキスト",
     "translateTo": "翻訳先の言語（日本語、英語、中国語、韓国語など）",
+    "emailTo": "メールの宛先（名前）",
+    "emailType": "メールの種類（お礼、お詫び、依頼、報告、確認など）",
+    "emailSubject": "メールの件名や内容の概要",
+    "dailyReportTasks": "今日やったこと（配列）",
+    "dailyReportTomorrow": "明日やること",
+    "dailyReportNotes": "備考・所感",
+    "templateName": "定型文の名前",
+    "templateContent": "定型文の内容（登録時）",
     "message": "雑談の応答テキスト"
   },
   "refersPrevious": true/false（直前の操作を参照しているかどうか）
@@ -117,6 +130,11 @@ JSON形式:
 - 「週間天気」→ weather, weatherDays: 7
 - 「〇〇を英語に」「translate」「翻訳して」→ translate
 - 翻訳先が未指定で日本語テキストなら英語、それ以外なら日本語
+- 「〇〇さんにメール」「お礼メール作って」→ email_draft
+- 「日報」「今日の報告」→ daily_report
+- 「〇〇の定型文」→ template_get
+- 「定型文一覧」→ template_list
+- 「定型文登録：〇〇＝内容」→ template_add
 - JSONのみを返し、説明文は一切付けない
 
 今日の日付: ${getToday()}`;
@@ -205,8 +223,59 @@ async function translate(text, targetLang) {
   }
 }
 
+// メール下書き作成
+async function generateEmailDraft(to, type, subject) {
+  try {
+    const systemPrompt = `あなたはビジネスメールの作成者です。以下の情報を元に、丁寧で簡潔なビジネスメールを作成してください。
+
+宛先：${to || '担当者'}様
+種類：${type || '連絡'}
+内容：${subject}
+
+以下の形式で返してください：
+件名：〇〇
+---
+本文`;
+
+    const response = await callGroq(systemPrompt, [{ role: 'user', content: `${type}のメールを作成してください。` }]);
+    return response.trim();
+  } catch (err) {
+    console.error('メール作成エラー:', err.response?.data || err.message);
+    return null;
+  }
+}
+
+// 日報作成
+async function generateDailyReport(tasks, tomorrow, notes) {
+  try {
+    const today = getToday();
+    const taskList = Array.isArray(tasks) ? tasks.join('\n- ') : tasks || '';
+
+    const systemPrompt = `あなたは日報作成アシスタントです。以下の情報を元に、簡潔な日報を作成してください。
+
+日付：${today}
+今日やったこと：${taskList}
+明日の予定：${tomorrow || ''}
+備考：${notes || ''}
+
+以下の形式で作成してください：
+【日報】${today}
+■ 本日の業務
+■ 明日の予定
+■ 所感・備考`;
+
+    const response = await callGroq(systemPrompt, [{ role: 'user', content: '日報を作成してください。' }]);
+    return response.trim();
+  } catch (err) {
+    console.error('日報作成エラー:', err.response?.data || err.message);
+    return null;
+  }
+}
+
 module.exports = {
   parseIntent,
   generateChatResponse,
   translate,
+  generateEmailDraft,
+  generateDailyReport,
 };
