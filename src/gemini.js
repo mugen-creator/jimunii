@@ -47,11 +47,16 @@ intent一覧:
 - task_complete: タスクを完了にする
 - task_delete: タスクを削除する
 - task_list: タスク一覧を表示する
+- attendance_in: 出勤を記録する
+- attendance_out: 退勤を記録する
+- attendance_status: 勤怠状況を確認する
+- weather: 天気予報を取得する
+- translate: テキストを翻訳する
 - chat: 上記以外の雑談・質問
 
 JSON形式:
 {
-  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "chat",
+  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "attendance_in" | "attendance_out" | "attendance_status" | "weather" | "translate" | "chat",
   "params": {
     "date": "YYYY-MM-DD形式（繰り返し予定の開始日）",
     "startDate": "期間の開始日（calendar_get用）",
@@ -77,6 +82,10 @@ JSON形式:
     "taskTitle": "タスクのタイトル",
     "taskPriority": "high" | "normal" | "low",
     "taskDueDate": "タスクの期限（YYYY-MM-DD）",
+    "weatherCity": "天気を調べる都市（東京、大阪、名古屋、福岡、札幌など）",
+    "weatherDays": 天気予報の日数（1〜7）,
+    "translateText": "翻訳するテキスト",
+    "translateTo": "翻訳先の言語（日本語、英語、中国語、韓国語など）",
     "message": "雑談の応答テキスト"
   },
   "refersPrevious": true/false（直前の操作を参照しているかどうか）
@@ -101,6 +110,13 @@ JSON形式:
 - 「完了」「終わった」「できた」などはtask_complete
 - 「タスク一覧」「やることリスト」などはtask_list
 - 「重要」「急ぎ」「優先」はtaskPriority: "high"
+- 「出勤」「おはよう」「出社」→ attendance_in
+- 「退勤」「お疲れ」「帰ります」→ attendance_out
+- 「勤怠」「今日の出勤」→ attendance_status
+- 「天気」「明日の天気」→ weather（都市指定なければ東京）
+- 「週間天気」→ weather, weatherDays: 7
+- 「〇〇を英語に」「translate」「翻訳して」→ translate
+- 翻訳先が未指定で日本語テキストなら英語、それ以外なら日本語
 - JSONのみを返し、説明文は一切付けない
 
 今日の日付: ${getToday()}`;
@@ -177,7 +193,20 @@ async function generateChatResponse(message, conversationHistory = []) {
   }
 }
 
+// 翻訳
+async function translate(text, targetLang) {
+  try {
+    const systemPrompt = `あなたは翻訳者です。与えられたテキストを${targetLang}に翻訳してください。翻訳結果のみを返してください。説明や注釈は不要です。`;
+    const response = await callGroq(systemPrompt, [{ role: 'user', content: text }]);
+    return response.trim();
+  } catch (err) {
+    console.error('翻訳エラー:', err.response?.data || err.message);
+    return null;
+  }
+}
+
 module.exports = {
   parseIntent,
   generateChatResponse,
+  translate,
 };

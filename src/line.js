@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const { parseIntent } = require('./gemini');
+const { parseIntent, translate } = require('./gemini');
 const { addEvent, addRecurringEvent, updateEvent, deleteEvent, getEvents } = require('./calendar');
 const { handleFileMessage, handleFileSaveIntent } = require('./drive');
 const { setReminder } = require('./reminder');
@@ -8,6 +8,8 @@ const { getHistory, addMessage, setLastAction, getLastAction } = require('./conv
 const { extractText, parseReceipt, formatReceiptResult } = require('./ocr');
 const { registerExpense, formatExpenseList, getMonthlyTotal } = require('./expense');
 const { addTask, completeTask, deleteTask, getAllTasks, formatTaskList } = require('./task');
+const { recordAttendance, getTodayAttendance, formatAttendanceStatus } = require('./attendance');
+const { getWeather, formatWeather } = require('./weather');
 
 // 最後に読み取ったレシート情報を保存
 const lastReceipts = new Map();
@@ -425,6 +427,61 @@ async function handleWebhook(req) {
           case 'task_list': {
             const allTasks = getAllTasks(groupId);
             responseMsg = formatTaskList(allTasks, true);
+            break;
+          }
+
+          case 'attendance_in': {
+            const record = await recordAttendance(userId, 'in', params.memo || '');
+            responseMsg = `🌅 おはようございます！\n\n出勤時刻：${record.time}\n\n今日も頑張りましょう！`;
+            break;
+          }
+
+          case 'attendance_out': {
+            const record = await recordAttendance(userId, 'out', params.memo || '');
+            const today = await getTodayAttendance(userId);
+
+            let msg = `🌙 お疲れさまでした！\n\n退勤時刻：${record.time}`;
+
+            if (today.clockIn) {
+              const inTime = today.clockIn.split(':').map(Number);
+              const outTime = record.time.split(':').map(Number);
+              const minutes = (outTime[0] * 60 + outTime[1]) - (inTime[0] * 60 + inTime[1]);
+              const hours = Math.floor(minutes / 60);
+              const mins = minutes % 60;
+              msg += `\n⏱️ 勤務時間：${hours}時間${mins}分`;
+            }
+
+            responseMsg = msg;
+            break;
+          }
+
+          case 'attendance_status': {
+            const today = await getTodayAttendance(userId);
+            responseMsg = formatAttendanceStatus(today);
+            break;
+          }
+
+          case 'weather': {
+            const city = params.weatherCity || '東京';
+            const days = params.weatherDays || 1;
+            const weather = await getWeather(city, days);
+            responseMsg = formatWeather(weather);
+            break;
+          }
+
+          case 'translate': {
+            const text = params.translateText;
+            const targetLang = params.translateTo || '英語';
+            if (!text) {
+              responseMsg = '❌ 翻訳するテキストを指定してください。';
+            } else {
+              const translated = await translate(text, targetLang);
+              if (translated) {
+                responseMsg = `🌐 翻訳（→${targetLang}）\n\n${translated}`;
+              } else {
+                responseMsg = '❌ 翻訳に失敗しました。';
+              }
+            }
             break;
           }
 
