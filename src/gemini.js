@@ -99,6 +99,10 @@ ${contextInfo}
 - help: ヘルプ
 - calculate: 計算
 - convert_unit: 単位変換
+- client_register: クライアント登録
+- client_info: クライアント情報確認
+- client_list: クライアント一覧
+- workflow_list: ワークフロー一覧
 - chat: 雑談・その他
 
 【JSON形式】

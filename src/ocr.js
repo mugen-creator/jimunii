@@ -242,6 +242,32 @@ function detectImageType(text) {
   return 'unknown';
 }
 
+// 経費カテゴリを自動判定
+function detectExpenseCategory(text, storeName) {
+  const lower = (text + ' ' + (storeName || '')).toLowerCase();
+
+  if (/タクシー|taxi|電車|jr|metro|バス|bus|駐車|parking|ガソリン|給油|高速|etc/i.test(lower)) {
+    return '交通費';
+  }
+  if (/弁当|ランチ|lunch|レストラン|カフェ|コーヒー|スタバ|ドトール|マック|吉野家|すき家|松屋|コンビニ/i.test(lower)) {
+    return '飲食費';
+  }
+  if (/文房具|コピー|用紙|ペン|封筒|クリップ|ホッチキス|百均|ダイソー|セリア|オフィス/i.test(lower)) {
+    return '消耗品';
+  }
+  if (/切手|郵便|宅配|ヤマト|佐川|郵送|レターパック/i.test(lower)) {
+    return '通信費';
+  }
+  if (/接待|会食|贈答|お中元|お歳暮|ギフト/i.test(lower)) {
+    return '接待交際費';
+  }
+  if (/宿泊|ホテル|旅館|出張/i.test(lower)) {
+    return '旅費交通費';
+  }
+
+  return 'その他';
+}
+
 module.exports = {
   extractText,
   parseReceipt,
@@ -249,4 +275,5 @@ module.exports = {
   parseBusinessCard,
   formatBusinessCardResult,
   detectImageType,
+  detectExpenseCategory,
 };

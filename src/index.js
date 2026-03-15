@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const { handleWebhook } = require('./line');
 const { startDailyReminder } = require('./reminder');
+const { initWorkflows } = require('./workflow');
+const { startDeadlineWatcher } = require('./deadline');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,4 +36,10 @@ app.listen(PORT, () => {
 
   // 毎朝通知のスケジューラー開始
   startDailyReminder();
+
+  // 自動ワークフロー開始
+  initWorkflows();
+
+  // 期限監視開始
+  startDeadlineWatcher();
 });

@@ -15,6 +15,9 @@ const { getHelp } = require('./help');
 const { calculate, convertUnit, formatCalcResult, formatConversionResult } = require('./calc');
 const { transcribeAudio } = require('./speech');
 const { extractPdfText, formatPdfContent } = require('./pdf');
+const { registerClient, findClient, listClients, formatClientInfo, formatClientList } = require('./client');
+const { listWorkflows } = require('./workflow');
+const { recordAction } = require('./pattern');
 
 // 最後に読み取ったレシート情報を保存
 const lastReceipts = new Map();
@@ -715,6 +718,46 @@ async function handleWebhook(req) {
             } else {
               responseMsg = '❌ 対応していない単位です。\n対応: マイル、キロ、フィート、インチ、ポンド、華氏、摂氏、坪、ガロン';
             }
+            break;
+          }
+
+          case 'client_register': {
+            const client = await registerClient({
+              name: params.clientName || params.title,
+              shortName: params.clientShortName,
+              billingDay: params.billingDay,
+              contact: params.clientContact,
+              email: params.clientEmail,
+            });
+            responseMsg = `✅ クライアントを登録しました！\n\n🏢 ${client.name}（${client.shortName}）`;
+            break;
+          }
+
+          case 'client_info': {
+            const client = await findClient(params.clientName || params.title);
+            responseMsg = formatClientInfo(client);
+            break;
+          }
+
+          case 'client_list': {
+            const clients = await listClients();
+            responseMsg = formatClientList(clients);
+            break;
+          }
+
+          case 'workflow_list': {
+            const wfs = listWorkflows(groupId);
+            let msg = '🔄 ワークフロー一覧\n\n【自動実行】';
+            for (const wf of wfs.default) {
+              msg += `\n・${wf.name}`;
+            }
+            if (wfs.custom.length > 0) {
+              msg += '\n\n【カスタム】';
+              for (const wf of wfs.custom) {
+                msg += `\n・${wf.name}`;
+              }
+            }
+            responseMsg = msg;
             break;
           }
 
