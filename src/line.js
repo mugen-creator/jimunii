@@ -5,6 +5,11 @@ const { addEvent, addRecurringEvent, updateEvent, deleteEvent, getEvents } = req
 const { handleFileMessage, handleFileSaveIntent } = require('./drive');
 const { setReminder } = require('./reminder');
 const { getHistory, addMessage, setLastAction, getLastAction } = require('./conversation');
+const { extractText, parseReceipt, formatReceiptResult } = require('./ocr');
+const { registerExpense, formatExpenseList, getMonthlyTotal } = require('./expense');
+
+// 最後に読み取ったレシート情報を保存
+const lastReceipts = new Map();
 
 const LINE_API_URL = 'https://api.line.me/v2/bot/message';
 const CHANNEL_ACCESS_TOKEN = (process.env.LINE_CHANNEL_ACCESS_TOKEN || '').trim();
@@ -118,6 +123,33 @@ async function handleWebhook(req) {
         const fileName = event.message.fileName;
         handleFileMessage(groupId, fileContent, fileName);
         await replyMessage(replyToken, '📎 ファイルを受け取りました。\n保存先やファイル名を教えてください。');
+        continue;
+      }
+
+      // 画像メッセージの処理（OCR）
+      if (event.message.type === 'image') {
+        await replyMessage(replyToken, '📸 画像を読み取り中...');
+
+        try {
+          const imageBuffer = await getFileContent(event.message.id);
+          const text = await extractText(imageBuffer);
+          const receipt = parseReceipt(text);
+          const resultMsg = formatReceiptResult(receipt);
+
+          // レシート情報を保存（後で経費登録に使う）
+          if (receipt.total) {
+            lastReceipts.set(groupId, {
+              ...receipt,
+              timestamp: Date.now(),
+            });
+          }
+
+          // プッシュメッセージで結果を送信（replyTokenは既に使用済み）
+          await pushMessage(groupId, resultMsg);
+        } catch (err) {
+          console.error('OCRエラー:', err);
+          await pushMessage(groupId, '❌ 画像の読み取りに失敗しました。');
+        }
         continue;
       }
 
@@ -326,6 +358,30 @@ async function handleWebhook(req) {
               });
             } else {
               responseMsg = `❌ リマインダーの設定に失敗しました。`;
+            }
+            break;
+          }
+
+          case 'expense_register': {
+            // 直前のレシート読み取り結果を使用
+            const lastReceipt = lastReceipts.get(groupId);
+
+            if (!lastReceipt || Date.now() - lastReceipt.timestamp > 10 * 60 * 1000) {
+              responseMsg = '❌ レシート情報が見つかりません。\n先にレシートの画像を送ってください。';
+            } else {
+              const expense = registerExpense({
+                date: lastReceipt.date,
+                store: lastReceipt.store,
+                amount: lastReceipt.total,
+                category: params.expenseCategory || 'その他',
+                memo: params.expenseMemo || '',
+              });
+
+              responseMsg = `✅ 経費を登録しました！\n\n📅 ${expense.date}\n🏪 ${expense.store}\n💰 ¥${expense.amount.toLocaleString()}\n📂 ${expense.category}`;
+              if (expense.memo) responseMsg += `\n💬 ${expense.memo}`;
+
+              // 使用済みのレシート情報を削除
+              lastReceipts.delete(groupId);
             }
             break;
           }
