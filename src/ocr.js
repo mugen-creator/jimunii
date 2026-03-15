@@ -141,8 +141,112 @@ function formatReceiptResult(receipt) {
   return msg;
 }
 
+// 名刺から情報を抽出
+function parseBusinessCard(text) {
+  const result = {
+    name: null,
+    company: null,
+    title: null,
+    email: null,
+    phone: null,
+    address: null,
+  };
+
+  if (!text) return result;
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+  // メールアドレス
+  const emailMatch = text.match(/[\w\.\-]+@[\w\.\-]+\.\w+/);
+  if (emailMatch) result.email = emailMatch[0];
+
+  // 電話番号
+  const phonePatterns = [
+    /(?:TEL|Tel|tel|電話)?[:\s]*(0\d{1,4}[\-\s]?\d{1,4}[\-\s]?\d{3,4})/,
+    /(?:携帯|Mobile)?[:\s]*(0[789]0[\-\s]?\d{4}[\-\s]?\d{4})/,
+  ];
+  for (const pattern of phonePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      result.phone = match[1].replace(/[\s\-]/g, '-');
+      break;
+    }
+  }
+
+  // 住所（〒で始まる行）
+  const addressMatch = text.match(/〒?\d{3}[-\s]?\d{4}[^\n]+/);
+  if (addressMatch) result.address = addressMatch[0];
+
+  // 会社名と名前の推測
+  for (const line of lines) {
+    // 株式会社、合同会社などを含む行は会社名
+    if (/株式会社|合同会社|有限会社|LLC|Inc|Corp/i.test(line) && !result.company) {
+      result.company = line;
+      continue;
+    }
+
+    // 役職っぽい行
+    if (/部長|課長|係長|主任|代表|取締役|社長|マネージャー|Director|Manager/i.test(line) && !result.title) {
+      result.title = line;
+      continue;
+    }
+
+    // 日本人名っぽい行（漢字2-4文字 + スペース + 漢字）
+    if (/^[\u4e00-\u9faf]{1,4}\s+[\u4e00-\u9faf]{1,4}$/.test(line) && !result.name) {
+      result.name = line;
+      continue;
+    }
+
+    // ローマ字名
+    if (/^[A-Z][a-z]+\s+[A-Z][a-z]+$/i.test(line) && !result.name) {
+      result.name = line;
+      continue;
+    }
+  }
+
+  return result;
+}
+
+// 名刺結果をフォーマット
+function formatBusinessCardResult(card) {
+  let msg = '📇 名刺読み取り結果\n';
+
+  if (card.name) msg += `\n👤 氏名：${card.name}`;
+  if (card.company) msg += `\n🏢 会社：${card.company}`;
+  if (card.title) msg += `\n💼 役職：${card.title}`;
+  if (card.phone) msg += `\n📞 電話：${card.phone}`;
+  if (card.email) msg += `\n📧 メール：${card.email}`;
+  if (card.address) msg += `\n📍 住所：${card.address}`;
+
+  if (!card.name && !card.company && !card.email && !card.phone) {
+    msg += '\n\n情報を抽出できませんでした。\n鮮明な画像で再度お試しください。';
+  }
+
+  return msg;
+}
+
+// 画像が名刺かレシートか判定
+function detectImageType(text) {
+  if (!text) return 'unknown';
+
+  // 名刺の特徴
+  const cardFeatures = ['株式会社', '合同会社', '@', 'TEL', 'FAX', '〒'];
+  const cardScore = cardFeatures.filter(f => text.includes(f)).length;
+
+  // レシートの特徴
+  const receiptFeatures = ['合計', '小計', '円', '税', '¥', 'お買上'];
+  const receiptScore = receiptFeatures.filter(f => text.includes(f)).length;
+
+  if (cardScore > receiptScore && cardScore >= 2) return 'card';
+  if (receiptScore > cardScore && receiptScore >= 2) return 'receipt';
+  return 'unknown';
+}
+
 module.exports = {
   extractText,
   parseReceipt,
   formatReceiptResult,
+  parseBusinessCard,
+  formatBusinessCardResult,
+  detectImageType,
 };

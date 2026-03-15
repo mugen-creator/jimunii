@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { getTodayEvents } = require('./calendar');
 const { pushMessage, formatDate, getDayOfWeek } = require('./line');
+const { generateWeeklyReport } = require('./report');
 
 // リマインダー保存（メモリ上）
 const reminders = [];
@@ -89,6 +90,30 @@ function startDailyReminder() {
   });
 
   console.log('毎朝10時の予定通知スケジューラーを開始しました');
+
+  // 毎週月曜9時に週次レポートを送信
+  cron.schedule('0 9 * * 1', async () => {
+    console.log('週次レポートを実行中...');
+
+    try {
+      const notificationTargets = process.env.DAILY_NOTIFICATION_TARGETS?.split(',') || [];
+
+      for (const target of notificationTargets) {
+        if (target.trim()) {
+          const report = await generateWeeklyReport(target.trim());
+          await pushMessage(target.trim(), report);
+        }
+      }
+
+      console.log('週次レポート送信完了');
+    } catch (err) {
+      console.error('週次レポートエラー:', err);
+    }
+  }, {
+    timezone: 'Asia/Tokyo',
+  });
+
+  console.log('毎週月曜9時の週次レポートスケジューラーを開始しました');
 }
 
 // 全リマインダーを取得（デバッグ用）

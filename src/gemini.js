@@ -57,11 +57,14 @@ intent一覧:
 - template_get: 定型文を呼び出す
 - template_add: 定型文を登録する
 - template_list: 定型文一覧を表示する
+- help: ヘルプ・使い方を表示する
+- calculate: 計算する
+- convert_unit: 単位変換する
 - chat: 上記以外の雑談・質問
 
 JSON形式:
 {
-  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "attendance_in" | "attendance_out" | "attendance_status" | "weather" | "translate" | "email_draft" | "daily_report" | "template_get" | "template_add" | "template_list" | "chat",
+  "intent": "calendar_add" | "calendar_add_recurring" | "calendar_delete" | "calendar_get" | "calendar_update" | "drive_save" | "reminder_set" | "expense_register" | "task_add" | "task_complete" | "task_delete" | "task_list" | "attendance_in" | "attendance_out" | "attendance_status" | "weather" | "translate" | "email_draft" | "daily_report" | "template_get" | "template_add" | "template_list" | "help" | "calculate" | "convert_unit" | "chat",
   "params": {
     "date": "YYYY-MM-DD形式（繰り返し予定の開始日）",
     "startDate": "期間の開始日（calendar_get用）",
@@ -99,6 +102,9 @@ JSON形式:
     "dailyReportNotes": "備考・所感",
     "templateName": "定型文の名前",
     "templateContent": "定型文の内容（登録時）",
+    "calcExpression": "計算式（例: 100+200, 1000*1.1）",
+    "convertValue": 変換する数値,
+    "convertUnit": "変換元の単位（マイル、キロ、華氏など）",
     "message": "雑談の応答テキスト"
   },
   "refersPrevious": true/false（直前の操作を参照しているかどうか）
@@ -135,6 +141,9 @@ JSON形式:
 - 「〇〇の定型文」→ template_get
 - 「定型文一覧」→ template_list
 - 「定型文登録：〇〇＝内容」→ template_add
+- 「ヘルプ」「使い方」「何ができる」→ help
+- 「100+200」「1000円の税込み」→ calculate
+- 「5マイルは何キロ」「30度は華氏で」→ convert_unit
 - JSONのみを返し、説明文は一切付けない
 
 今日の日付: ${getToday()}`;

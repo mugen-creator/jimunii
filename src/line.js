@@ -5,12 +5,16 @@ const { addEvent, addRecurringEvent, updateEvent, deleteEvent, getEvents } = req
 const { handleFileMessage, handleFileSaveIntent } = require('./drive');
 const { setReminder } = require('./reminder');
 const { getHistory, addMessage, setLastAction, getLastAction } = require('./conversation');
-const { extractText, parseReceipt, formatReceiptResult } = require('./ocr');
+const { extractText, parseReceipt, formatReceiptResult, parseBusinessCard, formatBusinessCardResult, detectImageType } = require('./ocr');
 const { registerExpense, formatExpenseList, getMonthlyTotal } = require('./expense');
 const { addTask, completeTask, deleteTask, getAllTasks, formatTaskList } = require('./task');
 const { recordAttendance, getTodayAttendance, formatAttendanceStatus } = require('./attendance');
 const { getWeather, formatWeather } = require('./weather');
 const { getTemplate, addTemplate, listTemplates, formatTemplateList } = require('./template');
+const { getHelp } = require('./help');
+const { calculate, convertUnit, formatCalcResult, formatConversionResult } = require('./calc');
+const { transcribeAudio } = require('./speech');
+const { extractPdfText, formatPdfContent } = require('./pdf');
 
 // 最後に読み取ったレシート情報を保存
 const lastReceipts = new Map();
@@ -135,8 +139,8 @@ async function handleWebhook(req) {
       event.message.text = event.message.text.replace(/@\S+/g, '').trim();
     }
 
-    // グループの場合、画像・ファイルも無視（1対1のみ処理）
-    if (isGroup && (event.message.type === 'image' || event.message.type === 'file')) {
+    // グループの場合、画像・ファイル・音声も無視（1対1のみ処理）
+    if (isGroup && (event.message.type === 'image' || event.message.type === 'file' || event.message.type === 'audio')) {
       continue;
     }
 
@@ -145,27 +149,53 @@ async function handleWebhook(req) {
       if (event.message.type === 'file') {
         const fileContent = await getFileContent(event.message.id);
         const fileName = event.message.fileName;
-        handleFileMessage(groupId, fileContent, fileName);
-        await replyMessage(replyToken, '📎 ファイルを受け取りました。\n保存先やファイル名を教えてください。');
+
+        // PDFの場合はテキスト抽出
+        if (fileName.toLowerCase().endsWith('.pdf')) {
+          await replyMessage(replyToken, '📄 PDF読み取り中...');
+          try {
+            const pdfResult = await extractPdfText(fileContent);
+            const resultMsg = formatPdfContent(pdfResult);
+            await pushMessage(groupId, resultMsg);
+          } catch (err) {
+            console.error('PDF読み取りエラー:', err);
+            await pushMessage(groupId, '❌ PDF読み取りに失敗しました。');
+          }
+        } else {
+          // 通常のファイル処理
+          handleFileMessage(groupId, fileContent, fileName);
+          await replyMessage(replyToken, '📎 ファイルを受け取りました。\n保存先やファイル名を教えてください。');
+        }
         continue;
       }
 
-      // 画像メッセージの処理（OCR）
+      // 画像メッセージの処理（OCR - レシート/名刺判別）
       if (event.message.type === 'image') {
         await replyMessage(replyToken, '📸 画像を読み取り中...');
 
         try {
           const imageBuffer = await getFileContent(event.message.id);
           const text = await extractText(imageBuffer);
-          const receipt = parseReceipt(text);
-          const resultMsg = formatReceiptResult(receipt);
+          const imageType = detectImageType(text);
 
-          // レシート情報を保存（後で経費登録に使う）
-          if (receipt.total) {
-            lastReceipts.set(groupId, {
-              ...receipt,
-              timestamp: Date.now(),
-            });
+          let resultMsg;
+
+          if (imageType === 'card') {
+            // 名刺として処理
+            const card = parseBusinessCard(text);
+            resultMsg = formatBusinessCardResult(card);
+          } else {
+            // レシートとして処理
+            const receipt = parseReceipt(text);
+            resultMsg = formatReceiptResult(receipt);
+
+            // レシート情報を保存（後で経費登録に使う）
+            if (receipt.total) {
+              lastReceipts.set(groupId, {
+                ...receipt,
+                timestamp: Date.now(),
+              });
+            }
           }
 
           // プッシュメッセージで結果を送信（replyTokenは既に使用済み）
@@ -173,6 +203,43 @@ async function handleWebhook(req) {
         } catch (err) {
           console.error('OCRエラー:', err);
           await pushMessage(groupId, '❌ 画像の読み取りに失敗しました。');
+        }
+        continue;
+      }
+
+      // 音声メッセージの処理
+      if (event.message.type === 'audio') {
+        await replyMessage(replyToken, '🎤 音声を認識中...');
+
+        try {
+          const audioBuffer = await getFileContent(event.message.id);
+          const transcription = await transcribeAudio(audioBuffer);
+
+          if (transcription) {
+            // 認識結果をテキストとして処理
+            const history = getHistory(groupId);
+            const lastAction = getLastAction(groupId);
+            const result = await parseIntent(transcription, history, lastAction);
+
+            addMessage(groupId, 'user', transcription);
+
+            let responseMsg = `🎤 「${transcription}」\n\n`;
+
+            if (result && result.intent) {
+              // 音声からのテキストを通常のテキスト処理と同様に処理
+              // ここでは認識結果を表示し、別途テキストとして送信してもらう
+              responseMsg += '↑ 認識結果です。このまま処理しますか？';
+            } else {
+              responseMsg += '認識しました。';
+            }
+
+            await pushMessage(groupId, responseMsg);
+          } else {
+            await pushMessage(groupId, '❌ 音声を認識できませんでした。');
+          }
+        } catch (err) {
+          console.error('音声認識エラー:', err);
+          await pushMessage(groupId, '❌ 音声認識に失敗しました。');
         }
         continue;
       }
@@ -557,6 +624,31 @@ async function handleWebhook(req) {
           case 'template_list': {
             const templates = listTemplates(groupId);
             responseMsg = formatTemplateList(templates);
+            break;
+          }
+
+          case 'help': {
+            responseMsg = getHelp();
+            break;
+          }
+
+          case 'calculate': {
+            const result = calculate(params.calcExpression);
+            if (result !== null) {
+              responseMsg = formatCalcResult(result);
+            } else {
+              responseMsg = '❌ 計算できませんでした。';
+            }
+            break;
+          }
+
+          case 'convert_unit': {
+            const conv = convertUnit(params.convertValue, params.convertUnit);
+            if (conv) {
+              responseMsg = formatConversionResult(conv);
+            } else {
+              responseMsg = '❌ 対応していない単位です。\n対応: マイル、キロ、フィート、インチ、ポンド、華氏、摂氏、坪、ガロン';
+            }
             break;
           }
 
