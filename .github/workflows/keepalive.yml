@@ -1,0 +1,19 @@
+name: Keep jimunii alive
+
+# Renderの無料プランは15分非アクティブでスリープするため、
+# 14分おきにpingしてスリープを防止する。
+# 月750時間枠内（30日×24時間=720時間）で常時稼働を維持できる。
+
+on:
+  schedule:
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping jimunii.onrender.com
+        run: |
+          echo "=== $(date -u) ==="
+          curl -sS -i --max-time 60 https://jimunii.onrender.com | head -20
