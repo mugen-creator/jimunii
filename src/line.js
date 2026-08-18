@@ -128,11 +128,6 @@ async function handleWebhook(req) {
     const groupId = source.groupId || userId;
     const isGroup = source.type === 'group' || source.type === 'room';
 
-    if (event.message.type === 'text' && event.message.text?.includes('gid確認')) {
-      await pushMessage(groupId, `groupId: ${source.groupId || 'なし(1:1トーク)'}\nuserId: ${userId}\ntype: ${source.type}`);
-      continue;
-    }
-
     // グループの場合、テキストメッセージはメンション必須
     if (isGroup && event.message.type === 'text') {
       const mention = event.message.mention;
