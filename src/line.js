@@ -147,6 +147,12 @@ async function handleWebhook(req) {
       continue;
     }
 
+    // [crowd-scout] uid返信（1対1・「uid」ぴったり）
+    if (!isGroup && event.message.type === 'text' && event.message.text.trim() === 'uid') {
+      await replyMessage(replyToken, `あなたのuserId:\n${userId}`);
+      continue;
+    }
+
     try {
       // ファイルメッセージの処理
       if (event.message.type === 'file') {
