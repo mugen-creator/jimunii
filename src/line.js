@@ -18,6 +18,7 @@ const { extractPdfText, formatPdfContent } = require('./pdf');
 const { registerClient, findClient, listClients, formatClientInfo, formatClientList } = require('./client');
 const { listWorkflows } = require('./workflow');
 const { recordAction } = require('./pattern');
+const crowdScout = require('./crowd-scout');
 
 // 最後に読み取ったレシート情報を保存
 const lastReceipts = new Map();
@@ -151,6 +152,25 @@ async function handleWebhook(req) {
     if (!isGroup && event.message.type === 'text' && event.message.text.trim() === 'uid') {
       await replyMessage(replyToken, `あなたのuserId:\n${userId}`);
       continue;
+    }
+
+    // [crowd-scout] 「N 揉んで」「N 応募文」コマンド（1対1のみ）
+    if (!isGroup && event.message.type === 'text') {
+      const csCmd = crowdScout.parseCommand(event.message.text);
+      if (csCmd) {
+        try {
+          let result;
+          if (csCmd.kind === 'detail') result = await crowdScout.handleDetail(csCmd.number);
+          else if (csCmd.kind === 'mome') result = await crowdScout.handleMome(csCmd.number);
+          else if (csCmd.kind === 'application') result = await crowdScout.handleApplication(csCmd.number);
+          else if (csCmd.kind === 'skip') result = await crowdScout.handleSkip(csCmd.number);
+          await replyMessage(replyToken, result);
+        } catch (err) {
+          console.error('[crowd-scout]', err);
+          await replyMessage(replyToken, `crowd-scout エラー: ${err.message}`);
+        }
+        continue;
+      }
     }
 
     try {
