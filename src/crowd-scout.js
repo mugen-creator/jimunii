@@ -5,7 +5,7 @@ const axios = require('axios');
 
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_KEY = (process.env.GROQ_API_KEY || '').trim();
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL = process.env.CROWD_SCOUT_MODEL || 'openai/gpt-oss-120b';
 const GIST_ID = (process.env.CROWD_SCOUT_GIST_ID || '').trim();
 const GH_TOKEN = (process.env.GITHUB_TOKEN || '').trim();
 
