@@ -158,16 +158,23 @@ async function handleWebhook(req) {
     if (!isGroup && event.message.type === 'text') {
       const csCmd = crowdScout.parseCommand(event.message.text);
       if (csCmd) {
+        // Groq応答遅いのでcold start時reply期限切れる。先にAck返す
+        try {
+          await replyMessage(replyToken, `処理中... ${csCmd.kind}[${csCmd.number}]`);
+        } catch (e) {
+          console.error('[crowd-scout] ack fail', e);
+        }
         try {
           let result;
           if (csCmd.kind === 'detail') result = await crowdScout.handleDetail(csCmd.number);
           else if (csCmd.kind === 'mome') result = await crowdScout.handleMome(csCmd.number);
           else if (csCmd.kind === 'application') result = await crowdScout.handleApplication(csCmd.number);
           else if (csCmd.kind === 'skip') result = await crowdScout.handleSkip(csCmd.number);
-          await replyMessage(replyToken, result);
+          if (!result) result = '(結果空)';
+          await pushMessage(groupId, result);
         } catch (err) {
           console.error('[crowd-scout]', err);
-          await replyMessage(replyToken, `crowd-scout エラー: ${err.message}`);
+          await pushMessage(groupId, `crowd-scout エラー: ${err.message}`);
         }
         continue;
       }
