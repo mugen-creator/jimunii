@@ -215,6 +215,57 @@ async function handleFavorite(number) {
   return `★[${number}] お気に入り追加 (計${favorites.length}件)\n${job.title.slice(0, 50)}\n\nMac で 'npm run favorites' → Claude Code に応募文書かせる素材取得`;
 }
 
+async function fetchApplied() {
+  const gist = await fetchGist();
+  const file = gist.files['crowd-scout-applied.json'];
+  if (!file) return [];
+  try {
+    return JSON.parse(file.content).applied || [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveApplied(applied) {
+  await axios.patch(
+    `https://api.github.com/gists/${GIST_ID}`,
+    {
+      files: {
+        'crowd-scout-applied.json': {
+          content: JSON.stringify({ updatedAt: new Date().toISOString(), applied }, null, 2),
+        },
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${GH_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000,
+    },
+  );
+}
+
+async function handleApplied(number) {
+  const store = await fetchStore();
+  const favorites = await fetchFavorites();
+  // 番号は最新Push（store.jobs）優先、なければお気に入りから探す
+  let job = store.jobs[number - 1] || favorites[number - 1];
+  if (!job) return `案件[${number}]なし`;
+  const applied = await fetchApplied();
+  const dupKey = `${job.source}:${job.id}`;
+  if (applied.find((a) => `${a.source}:${a.id}` === dupKey)) {
+    return `[${number}] 既に応募済登録\n${job.title.slice(0, 50)}`;
+  }
+  applied.push({ ...job, appliedAt: new Date().toISOString() });
+  await saveApplied(applied);
+  const now = new Date();
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const monthCount = applied.filter((a) => a.appliedAt?.startsWith(monthKey)).length;
+  return `✓[${number}] 応募済登録 (計${applied.length}件・今月${monthCount}件)\n${job.title.slice(0, 50)}`;
+}
+
 async function handleDetail(number) {
   const store = await fetchStore();
   const job = store.jobs[number - 1];
@@ -239,7 +290,7 @@ URL: ${job.url}
 // テキスト → コマンド解析
 function parseCommand(text) {
   const t = text.trim();
-  const m = t.match(/^(\d+)\s*(詳細|揉んで|もんで|議会|レビュー|応募文|応募|お気に入り|★|ふぁぼ|不要|スキップ)/);
+  const m = t.match(/^(\d+)\s*(詳細|揉んで|もんで|議会|レビュー|応募文|応募|お気に入り|★|ふぁぼ|送った|応募済|済|不要|スキップ)/);
   if (!m) return null;
   const number = parseInt(m[1], 10);
   const action = m[2];
@@ -247,8 +298,9 @@ function parseCommand(text) {
   if (['揉んで', 'もんで', '議会', 'レビュー'].includes(action)) return { number, kind: 'mome' };
   if (['応募文', '応募'].includes(action)) return { number, kind: 'application' };
   if (['お気に入り', '★', 'ふぁぼ'].includes(action)) return { number, kind: 'favorite' };
+  if (['送った', '応募済', '済'].includes(action)) return { number, kind: 'applied' };
   if (['不要', 'スキップ'].includes(action)) return { number, kind: 'skip' };
   return null;
 }
 
-module.exports = { parseCommand, handleDetail, handleMome, handleApplication, handleSkip, handleFavorite };
+module.exports = { parseCommand, handleDetail, handleMome, handleApplication, handleSkip, handleFavorite, handleApplied };

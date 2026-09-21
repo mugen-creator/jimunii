@@ -170,6 +170,7 @@ async function handleWebhook(req) {
           else if (csCmd.kind === 'mome') result = await crowdScout.handleMome(csCmd.number);
           else if (csCmd.kind === 'application') result = await crowdScout.handleApplication(csCmd.number);
           else if (csCmd.kind === 'favorite') result = await crowdScout.handleFavorite(csCmd.number);
+          else if (csCmd.kind === 'applied') result = await crowdScout.handleApplied(csCmd.number);
           else if (csCmd.kind === 'skip') result = await crowdScout.handleSkip(csCmd.number);
           if (!result) result = '(結果空)';
           await pushMessage(groupId, result);
