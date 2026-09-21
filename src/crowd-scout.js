@@ -65,7 +65,7 @@ const APPLICATION_PROMPT = `以下の案件への応募文を作成してくだ�
 本文のみ、そのままコピペで送信できる形式。改行は適切に入れる。
 `;
 
-async function fetchStore() {
+async function fetchGist() {
   if (!GIST_ID) throw new Error('CROWD_SCOUT_GIST_ID 未設定');
   if (!GH_TOKEN) throw new Error('GITHUB_TOKEN 未設定');
   const res = await axios.get(`https://api.github.com/gists/${GIST_ID}`, {
@@ -75,8 +75,46 @@ async function fetchStore() {
     },
     timeout: 10000,
   });
-  const content = res.data.files['crowd-scout-jobs.json'].content;
+  return res.data;
+}
+
+async function fetchStore() {
+  const gist = await fetchGist();
+  const content = gist.files['crowd-scout-jobs.json'].content;
   return JSON.parse(content);
+}
+
+async function fetchFavorites() {
+  const gist = await fetchGist();
+  const file = gist.files['crowd-scout-favorites.json'];
+  if (!file) return [];
+  try {
+    const parsed = JSON.parse(file.content);
+    return parsed.favorites || [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveFavorites(favorites) {
+  await axios.patch(
+    `https://api.github.com/gists/${GIST_ID}`,
+    {
+      files: {
+        'crowd-scout-favorites.json': {
+          content: JSON.stringify({ updatedAt: new Date().toISOString(), favorites }, null, 2),
+        },
+      },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${GH_TOKEN}`,
+        Accept: 'application/vnd.github+json',
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000,
+    },
+  );
 }
 
 async function fetchJobDetail(url) {
@@ -163,6 +201,20 @@ async function handleSkip(number) {
   return `[${number}] 不要登録: ${job.title.slice(0, 40)}\n(次回以降のフィルタ改善に活用します)`;
 }
 
+async function handleFavorite(number) {
+  const store = await fetchStore();
+  const job = store.jobs[number - 1];
+  if (!job) return `案件[${number}]なし`;
+  const favorites = await fetchFavorites();
+  const dupKey = `${job.source}:${job.id}`;
+  if (favorites.find((f) => `${f.source}:${f.id}` === dupKey)) {
+    return `★[${number}] 既にお気に入り登録済\n${job.title.slice(0, 50)}`;
+  }
+  favorites.push({ ...job, favoritedAt: new Date().toISOString() });
+  await saveFavorites(favorites);
+  return `★[${number}] お気に入り追加 (計${favorites.length}件)\n${job.title.slice(0, 50)}\n\nMac で 'npm run favorites' → Claude Code に応募文書かせる素材取得`;
+}
+
 async function handleDetail(number) {
   const store = await fetchStore();
   const job = store.jobs[number - 1];
@@ -187,15 +239,16 @@ URL: ${job.url}
 // テキスト → コマンド解析
 function parseCommand(text) {
   const t = text.trim();
-  const m = t.match(/^(\d+)\s*(詳細|揉んで|もんで|議会|レビュー|応募文|応募|不要|スキップ)/);
+  const m = t.match(/^(\d+)\s*(詳細|揉んで|もんで|議会|レビュー|応募文|応募|お気に入り|★|ふぁぼ|不要|スキップ)/);
   if (!m) return null;
   const number = parseInt(m[1], 10);
   const action = m[2];
   if (['詳細'].includes(action)) return { number, kind: 'detail' };
   if (['揉んで', 'もんで', '議会', 'レビュー'].includes(action)) return { number, kind: 'mome' };
   if (['応募文', '応募'].includes(action)) return { number, kind: 'application' };
+  if (['お気に入り', '★', 'ふぁぼ'].includes(action)) return { number, kind: 'favorite' };
   if (['不要', 'スキップ'].includes(action)) return { number, kind: 'skip' };
   return null;
 }
 
-module.exports = { parseCommand, handleDetail, handleMome, handleApplication, handleSkip };
+module.exports = { parseCommand, handleDetail, handleMome, handleApplication, handleSkip, handleFavorite };
