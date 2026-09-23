@@ -2,7 +2,7 @@ const axios = require('axios');
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_API_KEY = (process.env.GROQ_API_KEY || '').trim();
-const MODEL = 'llama-3.3-70b-versatile';
+const MODEL = process.env.JIMUNII_MODEL || 'openai/gpt-oss-120b';
 
 // 今日の日付を取得
 function getToday() {
