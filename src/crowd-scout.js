@@ -117,14 +117,17 @@ async function saveFavorites(favorites) {
   );
 }
 
-async function fetchJobDetail(url) {
+async function fetchJobDetail(url, jobDetail) {
+  // scout時にMac側で取得済のdetailがあれば優先（Render IP は405で弾かれるため）
+  if (jobDetail && !jobDetail.startsWith('[取得失敗:') && jobDetail.length > 100) {
+    return jobDetail;
+  }
   try {
     const res = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'ja,en;q=0.9',
-        'Cache-Control': 'no-cache',
       },
       timeout: 15000,
       maxRedirects: 5,
@@ -183,7 +186,7 @@ async function handleMome(number) {
   const store = await fetchStore();
   const job = store.jobs[number - 1];
   if (!job) return `案件[${number}]なし。1〜${store.jobs.length}で指定してください`;
-  const detail = await fetchJobDetail(job.url);
+  const detail = await fetchJobDetail(job.url, job.detail);
   const ctx = buildContext(job, detail);
   const result = await callGroq(PARLIAMENT_PROMPT, `${ctx}\n\n議会モードで評価してください。`);
   return `【${job.title.slice(0, 50)}】\n\n${result}`;
@@ -193,7 +196,7 @@ async function handleApplication(number) {
   const store = await fetchStore();
   const job = store.jobs[number - 1];
   if (!job) return `案件[${number}]なし`;
-  const detail = await fetchJobDetail(job.url);
+  const detail = await fetchJobDetail(job.url, job.detail);
   const ctx = buildContext(job, detail);
   const result = await callGroq(APPLICATION_PROMPT, `${ctx}\n\n応募文ドラフトを作成してください。`);
   // コピペしやすいよう前置き・後書きなしで応募文だけ返す
@@ -276,7 +279,7 @@ async function handleDetail(number) {
   const store = await fetchStore();
   const job = store.jobs[number - 1];
   if (!job) return `案件[${number}]なし`;
-  const detail = await fetchJobDetail(job.url);
+  const detail = await fetchJobDetail(job.url, job.detail);
   const src = job.source === 'crowdworks' ? 'クラワ' : 'ランサ';
   // LINE 1メッセージ上限5000文字なので抜粋を短めに
   const excerpt = detail.slice(0, 2000);
