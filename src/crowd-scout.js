@@ -120,8 +120,14 @@ async function saveFavorites(favorites) {
 async function fetchJobDetail(url) {
   try {
     const res = await axios.get(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)' },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ja,en;q=0.9',
+        'Cache-Control': 'no-cache',
+      },
       timeout: 15000,
+      maxRedirects: 5,
     });
     const text = String(res.data)
       .replace(/<script[\s\S]*?<\/script>/g, '')
