@@ -43,6 +43,24 @@ const PARLIAMENT_PROMPT = `あなたは「司哉の議会」の議員たちで�
 長文で語らない。マークダウン装飾なし。日本語で。
 `;
 
+const SUMMARY_PROMPT = `以下の案件詳細を、非エンジニアでも一目で分かるように要約してください。
+
+【出力形式（このまま出力・マークダウン装飾禁止）】
+◆結論: <この案件は何を求めてるか1行で>
+
+◆やること:
+・<3-5個>
+
+◆求められるスキル:
+・<3-5個>
+
+◆予算・期間: <1行>
+
+◆応募時に必要なもの:
+・<箇条書き>
+
+日本語で、専門用語は最小限、簡潔に。前置き・後書き禁止。上記フォーマットのみ。`;
+
 const APPLICATION_PROMPT = `以下の案件への応募文を作成してください。
 
 【出力ルール】
@@ -281,13 +299,12 @@ async function handleDetail(number) {
   if (!job) return `案件[${number}]なし`;
   const detail = await fetchJobDetail(job.url, job.detail);
   const src = job.source === 'crowdworks' ? 'クラワ' : 'ランサ';
-  // LINE 1メッセージ上限5000文字なので抜粋を短めに
-  const excerpt = detail.slice(0, 2000);
+  const summary = await callGroq(SUMMARY_PROMPT, `【案件タイトル】${job.title}\n【予算】${job.budget || '未記載'}\n\n【案件詳細】\n${detail}`);
   return `【[${number}] ${src} ${job.budget || ''}】
 ${job.title}
 
 ━━━━━━━━━━
-${excerpt}
+${summary}
 ━━━━━━━━━━
 
 URL: ${job.url}
