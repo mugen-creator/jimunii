@@ -126,7 +126,9 @@ async function handleWebhook(req) {
     try {
       if (await recorder.handle(event)) continue;
     } catch (err) {
+      // 記録中かどうか分からない時は、グループで勝手に発言しないよう何もしない
       console.error('記録係エラー:', err.message);
+      if (event.source?.type === 'group' || event.source?.type === 'room') continue;
     }
 
     if (event.type !== 'message') continue;
@@ -140,7 +142,8 @@ async function handleWebhook(req) {
     // グループの場合、テキストメッセージはメンション必須
     if (isGroup && event.message.type === 'text') {
       const mention = event.message.mention;
-      const hasBotMention = mention?.mentionees?.some(m => m.type === 'user');
+      // Bot自身への@だけに反応する（他の人への@では動かない）
+      const hasBotMention = mention?.mentionees?.some(m => m.isSelf === true);
 
       // メンションがない場合はスキップ
       if (!hasBotMention) {
