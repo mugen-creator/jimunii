@@ -18,7 +18,8 @@ function jst(ts) {
 
 async function gas(payload) {
   const r = await axios.post(URL_(), { ...payload, secret: SECRET() }, {
-    maxRedirects: 5, timeout: 60000, maxBodyLength: Infinity, maxContentLength: Infinity,
+    // 画像をbase64で送るので上限の約1.4倍まで許す。返事は小さいJSONだけ
+    maxRedirects: 5, timeout: 60000, maxBodyLength: Math.ceil(MAX_MEDIA_BYTES * 1.4) + 1024 * 1024, maxContentLength: 1024 * 1024,
   });
   if (r.data?.error) throw new Error(`GAS: ${r.data.error}`);
   return r.data;
@@ -132,13 +133,21 @@ async function handle(event) {
       if (msg.fileSize && msg.fileSize > MAX_MEDIA_BYTES) {
         row.note = `大きすぎて保存せず（${Math.round(msg.fileSize / 1048576)}MB）`;
       } else {
-        const r = await axios.get(`https://api-data.line.me/v2/bot/message/${msg.id}/content`, {
-          headers: { Authorization: `Bearer ${TOKEN()}` }, responseType: 'arraybuffer',
-        });
-        const mime = r.headers['content-type'] || 'application/octet-stream';
-        const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'video/mp4': '.mp4', 'audio/m4a': '.m4a' }[mime] || '';
-        const label = `${row.time.replace(/[/: ]/g, '')}_${who}`;
-        media = { base64: Buffer.from(r.data).toString('base64'), mime, name: msg.fileName ? `${label}_${msg.fileName}` : `${label}${ext}` };
+        let r = null;
+        try {
+          // 画像・動画はサイズが事前に分からないので、上限を超えたら途中で打ち切る
+          r = await axios.get(`https://api-data.line.me/v2/bot/message/${msg.id}/content`, {
+            headers: { Authorization: `Bearer ${TOKEN()}` }, responseType: 'arraybuffer', maxContentLength: MAX_MEDIA_BYTES,
+          });
+        } catch (e) {
+          row.note = /maxContentLength/.test(e.message) ? '大きすぎて保存せず' : `取得できず（${e.message}）`;
+        }
+        if (r) {
+          const mime = r.headers['content-type'] || 'application/octet-stream';
+          const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'video/mp4': '.mp4', 'audio/m4a': '.m4a' }[mime] || '';
+          const label = `${row.time.replace(/[/: ]/g, '')}_${who}`;
+          media = { base64: Buffer.from(r.data).toString('base64'), mime, name: msg.fileName ? `${label}_${msg.fileName}` : `${label}${ext}` };
+        }
       }
       if (msg.type === 'image' || msg.type === 'video') notify(groupId, st.owner, who, msg.type === 'image' ? '画像' : '動画');
     } else row.content = `（${msg.type}）`;
