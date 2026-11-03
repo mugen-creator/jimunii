@@ -93,7 +93,8 @@ async function start(groupId, ownerUserId) {
   await lookup(groupId);
   const existingSheetId = groups.get(groupId)?.sheetId || cached?.sheetId;
   if (existingSheetId) {
-    await drive().files.update({ fileId: existingSheetId, resource: { appProperties: { status: 'active', owner: ownerUserId } } });
+    // 持ち主は変えない（再開できるのは持ち主だけ。呼び出し側で確認済み）
+    await drive().files.update({ fileId: existingSheetId, resource: { appProperties: { status: 'active' } } });
   } else {
     const props = { groupId, status: 'active', owner: ownerUserId };
     const sheet = await drive().files.create({
@@ -110,6 +111,15 @@ async function start(groupId, ownerUserId) {
   }
   groups.delete(groupId);
   return lookup(groupId);
+}
+
+// 記録を始めた人（停止中でも残る）
+async function currentOwner(groupId) {
+  await lookup(groupId);
+  const sheetId = groups.get(groupId)?.sheetId;
+  if (!sheetId) return null;
+  const f = await drive().files.get({ fileId: sheetId, fields: 'appProperties' });
+  return f.data.appProperties?.owner || null;
 }
 
 async function stop(groupId) {
@@ -183,6 +193,11 @@ async function handle(event) {
 
   if (msg.type === 'text' && botMentioned(msg)) {
     const cmd = msg.text.replace(/@\S+/g, '').trim();
+    const owner = await currentOwner(groupId);
+    if ((cmd === '記録開始' || cmd === '記録停止') && owner && owner !== source.userId) {
+      await reply(event.replyToken, '記録の開始・停止は、最初に記録を始めた人だけができます');
+      return true;
+    }
     if (cmd === '記録開始') {
       try {
         await start(groupId, source.userId);
