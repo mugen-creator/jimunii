@@ -19,6 +19,7 @@ const { registerClient, findClient, listClients, formatClientInfo, formatClientL
 const { listWorkflows } = require('./workflow');
 const { recordAction } = require('./pattern');
 const crowdScout = require('./crowd-scout');
+const recorder = require('./recorder');
 
 // 最後に読み取ったレシート情報を保存
 const lastReceipts = new Map();
@@ -121,6 +122,13 @@ async function handleWebhook(req) {
   const events = JSON.parse(body.toString()).events;
 
   for (const event of events) {
+    // 記録中のグループは記録係だけが扱う（他の機能は動かさない）
+    try {
+      if (await recorder.handle(event)) continue;
+    } catch (err) {
+      console.error('記録係エラー:', err.message);
+    }
+
     if (event.type !== 'message') continue;
 
     const replyToken = event.replyToken;
